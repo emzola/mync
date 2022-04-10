@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 )
 
 type httpConfig struct {
@@ -39,9 +40,11 @@ func validateConfig(c httpConfig) error {
 // HandleHttp handles the http command.
 func HandleHttp(w io.Writer, args []string) error {
 	c := httpConfig{}
+	var outputFile string
 	fs := flag.NewFlagSet("http", flag.ContinueOnError)
 	fs.SetOutput(w)
 	fs.StringVar(&c.verb, "verb", "GET", "HTTP method")
+	fs.StringVar(&outputFile, "output", "", "File path to write the response into")
 	fs.Usage = func() {
 		var usageString = `
 http: A HTTP client.
@@ -62,12 +65,12 @@ http: <options> server`
 	if fs.NArg() != 1 {
 		return ErrNoServerSpecified
 	}
-
+	
 	// Make sure only allowed verbs are used as HTTP methods
 	err = validateConfig(c)
 	if err != nil {
 		if errors.Is(err, ErrInvalidHTTPMethod) {
-			fmt.Fprint(w, err)
+			fmt.Fprint(w, "invalid HTTP method")
 		}
 		return err
 	}
@@ -80,8 +83,24 @@ http: <options> server`
 		return nil
 	}
 
+	// Create file and write data to it
+	if len(outputFile) != 0 {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return err
+		}
+
+		defer f.Close()
+
+		_, err = f.Write(data)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(w, "Data saved to: %s\n", outputFile)
+		return err
+	}
+
 	fmt.Fprintf(w, "%s\n", data)
 	return nil
 }
-
-

@@ -6,31 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 )
 
 func startTestHTTPServer() *httptest.Server {
-	ts := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, "Hello world")
-		}))
-	return ts
-}
-
-func TestFetchRemoteResource(t *testing.T) {
-	ts := startTestHTTPServer()
-	defer ts.Close()
-
-	expected := "Hello world"
-
-	data, err := fetchRemoteResource(ts.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if expected != string(data) {
-		t.Errorf("Expected response to be: %v. Got %v", expected, data)
-	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "this is a response")
+	})	
+	return httptest.NewServer(mux)
 }
 
 func TestHandleHttp(t *testing.T) {
@@ -38,11 +23,19 @@ func TestHandleHttp(t *testing.T) {
 http: A HTTP client.
 
 http: <options> server
-
-Options: 
-  -verb string
-    	HTTP method (default "GET")
+	
+Options:
+		-output string
+					File path to write the response into
+		-verb string
+					HTTP method (default "GET")
 `
+
+	ts := startTestHTTPServer()
+	defer ts.Close()
+
+	outputFile := filepath.Join(t.TempDir(), "file_path.out")
+
 	testConfigs := []struct {
 		args   []string
 		output string
@@ -58,14 +51,19 @@ Options:
 			output: usageMessage,
 		},
 		{
-			args:   []string{"http://localhost"},
-			err:    nil,
-			output: "Executing http command\n",
+			args: []string{ts.URL + "/download"},
+			err: nil,
+			output: "this is a response\n",
 		},
 		{
 			args:   []string{"-verb", "PUT", "http://localhost"},
 			err: ErrInvalidHTTPMethod,
 			output: "invalid HTTP method",
+		},
+		{
+			args:   []string{"-verb", "GET", "-output", outputFile, ts.URL + "/download"},
+			err: nil,
+			output: fmt.Sprintf("Data saved to: %s\n", outputFile),
 		},
 	}
 	byteBuf := new(bytes.Buffer)
