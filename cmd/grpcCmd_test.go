@@ -13,10 +13,10 @@ grpc: A gRPC client.
 grpc: <options> server
 
 Options: 
--body string
-        Body of request
+  -body string
+    	Body of request
   -method string
-        Method to call
+    	Method to call
 `
 	testConfigs := []struct {
 		args   []string

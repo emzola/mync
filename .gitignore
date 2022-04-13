@@ -3,3 +3,4 @@
 bin/
 remote/
 **/Makefile
+.txt
