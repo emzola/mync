@@ -27,6 +27,9 @@ func startTestHttpServer() *httptest.Server {
 		}
 		fmt.Fprintf(w, "JSON request received: %d bytes", len(data))
 	})
+	mux.HandleFunc("/redirect", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/new-url", http.StatusMovedPermanently)
+	})
 	return httptest.NewServer(mux)
 }
 
@@ -41,6 +44,8 @@ Options:
     	JSON data for HTTP POST request
   -body-file string
     	File containing JSON data for HTTP POST request
+  -disable-redirect
+    	Do not follow redirection request
   -output string
     	File path to write the response into
   -verb string
@@ -79,7 +84,7 @@ Options:
 		},
 		{
 			args:   []string{"-verb", "PUT", "http://localhost"},
-			err:    ErrInvalidHTTPMethod,
+			err:    InvalidInputError{err: ErrInvalidHTTPMethod},
 			output: "invalid HTTP method\n",
 		},
 		{
@@ -89,8 +94,7 @@ Options:
 		},
 		{
 			args:   []string{"-verb", "POST", "-body", "", ts.URL + "/upload"},
-			err:    ErrInvalidHTTPPostRequest,
-			output: "http POST request must specify a non-empty JSON body\n",
+			err:    InvalidInputError{err: ErrInvalidHTTPPostRequest},
 		},
 		{
 			args:   []string{"-verb", "POST", "-body", jsonBody, ts.URL + "/upload"},
@@ -101,6 +105,10 @@ Options:
 			args:   []string{"-verb", "POST", "-body-file", jsonBodyFile, ts.URL + "/upload"},
 			err:    nil,
 			output: fmt.Sprintf("JSON request received: %d bytes\n", len(jsonBody)),
+		},
+		{
+			args: []string{"-disable-redirect", ts.URL + "/redirect"},
+			err: errors.New(`Get "new-url: stopped after 1 redirect`),
 		},
 	}
 	byteBuf := new(bytes.Buffer)

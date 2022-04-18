@@ -15,6 +15,7 @@ type httpConfig struct {
 	url      string
 	postBody string
 	verb     string
+	disableRedirect bool
 }
 
 // createRemoteResource creates data on a remote resource.
@@ -23,13 +24,12 @@ func createRemoteResource(url string, r io.Reader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer resp.Body.Close()
 	return io.ReadAll(resp.Body)
 }
 
 // fetchRemoteResource returns data from a remote resource.
-func fetchRemoteResource(url string) ([]byte, error) {
+func fetchRemoteResource(client *http.Client, url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -66,15 +66,17 @@ func validateConfig(c httpConfig) error {
 
 // HandleHttp handles the http command.
 func HandleHttp(w io.Writer, args []string) error {
-	c := httpConfig{}
-
 	var outputFile string
 	var postBodyFile string
 	var responseBody []byte
+	var redirectPolicyFunc func (req *http.Request, via []*http.Request) error
+
+	c := httpConfig{}
 
 	fs := flag.NewFlagSet("http", flag.ContinueOnError)
 	fs.SetOutput(w)
 	fs.StringVar(&c.verb, "verb", "GET", "HTTP method")
+	fs.BoolVar(&c.disableRedirect, "disable-redirect", false, "Do not follow redirection request")
 	fs.StringVar(&c.postBody, "body", "", "JSON data for HTTP POST request")
 	fs.StringVar(&postBodyFile, "body-file", "", "File containing JSON data for HTTP POST request")
 	fs.StringVar(&outputFile, "output", "", "File path to write the response into")
@@ -125,19 +127,31 @@ http: <options> server`
 
 	c.url = fs.Arg(0)
 
+	// disable redirect if -disable-redirect option is specified
+	if c.disableRedirect {
+		redirectPolicyFunc = func (url *http.Request, via []*http.Request) error {
+			if len(via) >= 1 {
+				return errors.New("stopped after 1 redirect")
+			}
+			return nil
+		} 
+	}
+
+	httpClient := http.Client{CheckRedirect: redirectPolicyFunc}
+
 	// Determine which request to make
 	switch c.verb {
 	case http.MethodGet:
-		responseBody, err = fetchRemoteResource(c.url)
+		responseBody, err = fetchRemoteResource(&httpClient, c.url)
 		if err != nil {
 			return nil
 		}
 	case http.MethodPost:
-		reader := bytes.NewReader([]byte(c.postBody))
-		responseBody, err = createRemoteResource(c.url, reader)
-		if err != nil {
-			return err
-		}
+			reader := bytes.NewReader([]byte(c.postBody))
+			responseBody, err = createRemoteResource(c.url, reader)
+			if err != nil {
+				return err
+			}		
 	}
 
 	// if -output option is specified, create file and write data to it
@@ -146,7 +160,6 @@ http: <options> server`
 		if err != nil {
 			return err
 		}
-
 		defer f.Close()
 
 		_, err = f.Write(responseBody)
