@@ -9,27 +9,50 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func startTestHttpServer() *httptest.Server {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/download", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "this is a response")
 	})
-	mux.HandleFunc("/upload", func(w http.ResponseWriter, req *http.Request) {
-		defer req.Body.Close()
-		data, err := io.ReadAll(req.Body)
+
+	mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		fmt.Fprintf(w, "JSON request received: %d bytes", len(data))
 	})
+
 	mux.HandleFunc("/redirect", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/new-url", http.StatusMovedPermanently)
 	})
+
+	mux.HandleFunc("/debug-header-response", func(w http.ResponseWriter, r *http.Request) {
+		headers := []string{}
+		for k, v := range r.Header {
+			if strings.HasPrefix(k, "Debug") {
+				headers = append(headers, fmt.Sprintf("%s=%s", k, v[0]))
+			}
+		}
+		fmt.Fprint(w, strings.Join(headers, " "))
+	})
+
+	mux.HandleFunc("/debug-basicauth", func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok {
+			http.Error(w, "Basic auth missing/malformed", http.StatusBadRequest)
+			return
+		}
+		fmt.Fprintf(w, "%s=%s", u, p)
+	})
+
 	return httptest.NewServer(mux)
 }
 
@@ -40,12 +63,16 @@ http: A HTTP client.
 http: <options> server
 
 Options: 
+  -basicauth string
+    	Add basic auth (username:password) credentials to the outgoing request
   -body string
     	JSON data for HTTP POST request
   -body-file string
     	File containing JSON data for HTTP POST request
   -disable-redirect
     	Do not follow redirection request
+  -header value
+    	Add one or more headers to the outgoing request (key=value)
   -output string
     	File path to write the response into
   -verb string
@@ -108,7 +135,17 @@ Options:
 		},
 		{
 			args: []string{"-disable-redirect", ts.URL + "/redirect"},
-			err: errors.New(`Get "new-url: stopped after 1 redirect`),
+			err: errors.New(`Get "/new-url": stopped after 1 redirect`),
+		},
+		{
+			args: []string{"-header", "Debug-Key1=value1", "-header", "Debug-Key2=value2", ts.URL + "/debug-header-response"},
+			err: nil,
+			output: "Debug-Key1=value1 Debug-Key2=value2\n",
+		},
+		{
+			args: []string{"-basicauth", "user=password", ts.URL + "/debug-basicauth"},
+			err: nil,
+			output: "user=password\n",
 		},
 	}
 	byteBuf := new(bytes.Buffer)
@@ -130,7 +167,7 @@ Options:
 		if len(tc.output) != 0 {
 			gotOutput := byteBuf.String()
 			if tc.output != gotOutput {
-				t.Errorf("Expected output to be: %#v, Got: %#v", tc.output, gotOutput)
+				t.Errorf("Expected output to be: %s, Got: %s", tc.output, gotOutput)
 			}
 		}
 		byteBuf.Reset()
