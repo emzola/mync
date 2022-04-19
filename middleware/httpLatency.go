@@ -1,0 +1,18 @@
+package middleware
+
+import (
+	"log"
+	"net/http"
+	"time"
+)
+
+type HTTPLatencyClient struct {
+	Logger *log.Logger
+}
+
+func (c HTTPLatencyClient) RoundTrip(r *http.Request) (*http.Response, error) {
+	startTime := time.Now()
+	resp, err := http.DefaultTransport.RoundTrip(r)
+	c.Logger.Printf("url=%s method=%s protocol=%s latency=%f\n", r.URL, r.Method, r.Proto, time.Since(startTime).Seconds())
+	return resp, err
+}

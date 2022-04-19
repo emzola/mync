@@ -111,7 +111,7 @@ Options:
 		},
 		{
 			args:   []string{"-verb", "PUT", "http://localhost"},
-			err:    InvalidInputError{err: ErrInvalidHTTPMethod},
+			err:    InvalidInputError{Err: ErrInvalidHTTPMethod},
 			output: "invalid HTTP method\n",
 		},
 		{
@@ -121,7 +121,7 @@ Options:
 		},
 		{
 			args:   []string{"-verb", "POST", "-body", "", ts.URL + "/upload"},
-			err:    InvalidInputError{err: ErrInvalidHTTPPostRequest},
+			err:    InvalidInputError{Err: ErrInvalidHTTPPostRequest},
 		},
 		{
 			args:   []string{"-verb", "POST", "-body", jsonBody, ts.URL + "/upload"},

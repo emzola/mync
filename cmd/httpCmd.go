@@ -7,9 +7,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/emzola/mync/middleware"
 )
 
 type httpConfig struct {
@@ -143,7 +146,15 @@ http: <options> server`
 		} 
 	}
 
-	httpClient = http.Client{CheckRedirect: redirectPolicyFunc}
+	// Middleware for calculating request latencies
+	httpLatencyMiddleware := middleware.HTTPLatencyClient{
+		Logger: log.New(os.Stdout, "", log.LstdFlags),
+	}	
+
+	httpClient = http.Client{
+		CheckRedirect: redirectPolicyFunc,
+		Transport: httpLatencyMiddleware,
+	}
 
 	// Determine which request to send
 	switch c.verb {

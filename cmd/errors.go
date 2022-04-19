@@ -20,9 +20,9 @@ func (e FlagParsingError) Error() string {
 }
 
 type InvalidInputError struct {
-	err error
+	Err error
 }
 
 func (e InvalidInputError) Error() string {
-	return e.err.Error()
+	return e.Err.Error()
 }

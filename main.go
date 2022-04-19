@@ -23,7 +23,7 @@ func handleCommand(w io.Writer, args []string) error {
 	var err error
 
 	if len(args) < 1 {
-		err = errInvalidSubCommand
+		err = cmd.InvalidInputError{Err: errInvalidSubCommand}
 	} else {
 		switch args[0] {
 		case "http":
@@ -35,14 +35,17 @@ func handleCommand(w io.Writer, args []string) error {
 		case "-help":
 			printUsage(w)
 		default:
-			err = errInvalidSubCommand
+			err = cmd.InvalidInputError{Err: errInvalidSubCommand}
 		}
 	}
-
-	if errors.Is(err, cmd.ErrNoServerSpecified) || errors.Is(err, errInvalidSubCommand) {
-		fmt.Fprintln(w, err)
-		printUsage(w)
-	}	
+	if err != nil {
+		if !errors.As(err, &cmd.FlagParsingError{}) {
+			fmt.Fprintln(w, err.Error())
+		}	
+		if errors.As(err, &cmd.InvalidInputError{}) {
+			printUsage(w)
+		}
+	}
 	return err
 }
 
